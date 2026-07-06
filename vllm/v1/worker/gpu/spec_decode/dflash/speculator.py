@@ -192,9 +192,9 @@ class DFlashSpeculator(DraftModelSpeculator):
         num_reqs: int,
     ) -> None:
         dflash_config = getattr(self.model.config, "dflash_config", {}) or {}
-        shift_label = bool(dflash_config.get("shift_label", False))
+        shift_label = bool(getattr(self.model.config, "shift_label", None) or dflash_config.get("shift_label", False))
         prefix_len = min(
-            int(dflash_config.get("pure_draft_prefix_len", 0)),
+            int(getattr(self.model.config, "pure_draft_prefix_len", None) or dflash_config.get("pure_draft_prefix_len", 0)),
             self.num_speculative_steps,
         )
 

@@ -482,6 +482,8 @@ class DFlashQwen3Model(nn.Module):
                 weight_loader(param, loaded_weight, shard_id)
                 break
             else:
+                if name not in params_dict:
+                    continue
                 param = params_dict[name]
                 weight_loader = getattr(param, "weight_loader", default_weight_loader)
                 weight_loader(param, loaded_weight)
@@ -493,8 +495,8 @@ class DominoHead(nn.Module):
         super().__init__()
         dflash_config = getattr(config, "dflash_config", {}) or {}
 
-        self.gru_hidden_dim = int(dflash_config["gru_hidden_dim"])
-        self.emb_dim = int(dflash_config["emb_dim"])
+        self.gru_hidden_dim = int(getattr(config, "gru_hidden_dim", None) or dflash_config["gru_hidden_dim"])
+        self.emb_dim = int(getattr(config, "emb_dim", None) or dflash_config["emb_dim"])
 
         self.prefix_gru = nn.GRU(
             input_size=config.hidden_size,
@@ -599,7 +601,7 @@ class DFlashQwen3ForCausalLM(Qwen3ForCausalLM):
             self.draft_id_to_target_id = None
 
         dflash_config = getattr(self.config, "dflash_config", {}) or {}
-        self.projector_type = dflash_config.get("projector_type")
+        self.projector_type = getattr(self.config, "projector_type", None) or dflash_config.get("projector_type")
         self.is_domino = self.projector_type == "domino"
 
         if self.is_domino:
@@ -687,6 +689,9 @@ class DFlashQwen3ForCausalLM(Qwen3ForCausalLM):
             if getattr(self, "is_domino", False):
                 if name.startswith("prefix_gru.") or name.startswith("embed_proj."):
                     domino_weights.append((f"domino_head.{name}", loaded_weight))
+                    continue
+                if name.startswith("domino_head."):
+                    domino_weights.append((name, loaded_weight))
                     continue
 
             if "t2d" in name:
