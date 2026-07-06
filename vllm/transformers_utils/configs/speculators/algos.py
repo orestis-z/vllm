@@ -114,7 +114,17 @@ def update_dflash(config_dict: dict, pre_trained_config: dict) -> None:
     pre_trained_config["eagle_aux_hidden_state_layer_ids"] = aux_layer_ids
 
     # DFlash configs use different indexing for the target layers, see #40727
-    pre_trained_config["dflash_config"] = {
+    dflash_config = {
         "mask_token_id": config_dict["mask_token_id"],
         "target_layer_ids": [i - 1 for i in aux_layer_ids],
     }
+
+    # Domino head fields (projector_type, shift_label, gru_hidden_dim, emb_dim,
+    # pure_draft_prefix_len) are top-level in speculators config.json but need
+    # to be accessible via dflash_config for the DFlash model/speculator code.
+    for key in ("projector_type", "shift_label", "gru_hidden_dim", "emb_dim",
+                "pure_draft_prefix_len"):
+        if key in config_dict:
+            dflash_config[key] = config_dict[key]
+
+    pre_trained_config["dflash_config"] = dflash_config
