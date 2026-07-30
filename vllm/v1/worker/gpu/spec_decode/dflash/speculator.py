@@ -149,7 +149,7 @@ class DFlashSpeculator(DraftModelSpeculator):
             self.attn_groups,
             self.kv_cache_config,
             self.max_model_len,
-            causal=self.dflash_causal,
+            causal=self._group_causal,
             progress_bar_desc=f"Capturing {self._speculator_name.lower()} CUDA graphs",
         )
 
@@ -183,31 +183,13 @@ class DFlashSpeculator(DraftModelSpeculator):
             "DFlash currently requires all draft attention layers to share "
             "a single kv-cache group."
         )
+        self.draft_kv_cache_group_id = draft_groups[0]
+        self.draft_block_size = kv_cache_config.kv_cache_groups[
+            self.draft_kv_cache_group_id
+        ].kv_cache_spec.block_size
 
-        # Map each draft decoder layer to the index (within draft_kv_cache_group_ids)
-        # of the kv-cache group its cache belongs to. Models that share a single group
-        # leave this as None and share one context slot mapping.
         self._layer_group_idx: list[int] | None = None
-        # Per-KV-group causal, falling back to whether the drafter is all-causal.
         self._group_causal: dict[int, bool] | bool = not self.requires_non_causal
-        if hasattr(self.model, "get_draft_kv_cache_layer_names"):
-            layer_names = self.model.get_draft_kv_cache_layer_names()
-            name_to_gid = {
-                ln: gid
-                for gid, group in enumerate(kv_cache_config.kv_cache_groups)
-                for ln in group.layer_names
-            }
-            gid_to_idx = {gid: i for i, gid in enumerate(self.draft_kv_cache_group_ids)}
-            self._layer_group_idx = [
-                gid_to_idx[name_to_gid[name]] for name in layer_names
-            ]
-            if hasattr(self.model, "get_draft_attn_causal"):
-                self._group_causal = {
-                    name_to_gid[name]: layer_causal
-                    for name, layer_causal in zip(
-                        layer_names, self.model.get_draft_attn_causal()
-                    )
-                }
 
     @torch.inference_mode()
     def _run_model(
